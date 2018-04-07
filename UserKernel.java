@@ -132,7 +132,7 @@ public class UserKernel extends ThreadedKernel {
 		Lib.assertTrue(page >= 0);
 		Lib.assertTrue(page < Machine.processor().getNumPhysPages());//MAKE SURE PAGE NUMBER IS VALID 
 		
-		pageTable.addPage(page);//ADD PAGE
+		pageTable.add(page);//ADD PAGE
 		
 		Machine.interrupt().enable();
 	}
