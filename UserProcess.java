@@ -142,16 +142,16 @@ public class UserProcess {
 	    return 0;
 	*/
 	
-	//
-	TranslationEntry tEntry = pageTable[vPage];
-	tEntry.used = true;
 	
-	int pPage = entry.ppn;
+	TranslationEntry tEntry = pageTable[vPage]; //put virtual page into tEntry
+	tEntry.used = true; //tEntry is used
 	
-	if(pPage < 0 || pPage >= proc.getNumPhysPages())
+	int pPage = tEntry.ppn; //get physical page number
+	
+	if(pPage < 0 || pPage >= proc.getNumPhysPages()) //if page number is invalid
 		return 0;
 	
-	int pAddr = (pPage*pageSize) + addrOffset;
+	int pAddr = (pPage*pageSize) + addrOffset; //physical address
 	
 	
 	int amount = Math.min(length, memory.length-vaddr);
@@ -202,18 +202,18 @@ public class UserProcess {
 	    return 0;
 	*/
 	
-	TranslationEntry tEntry = pageTable[vPage];
-	tEntry.used = true;
+	TranslationEntry tEntry = pageTable[vPage]; //tEntry holds virtual page from pageTable
+	tEntry.used = true; //tEntry is used
 	
-	int pPage = entry.ppn;
+	int pPage = tEntry.ppn; //pPage is tEntry's physical page number
 	
-	if(pPage < 0 || pPage >= proc.getNumPhysPages())
+	if(pPage < 0 || pPage >= proc.getNumPhysPages()) //if page is invalid
 		return 0;
 	
-	int pAddr = (pPage*pageSize) + addrOffset;
-	tEntry.dirty = true;
+	int pAddr = (pPage*pageSize) + addrOffset; //get physical address
+	tEntry.dirty = true; //mark tEntry as being written to
 
-	int amount = Math.min(length, memory.length-vaddr);
+	int amount = Math.min(length, memory.length-vaddr); 
 	System.arraycopy(data, offset, memory, vaddr, amount);
 
 	return amount;
@@ -304,12 +304,13 @@ public class UserProcess {
 	    stringOffset += 1;
 	}
 	
-	pageTable = new TranslationEntry[numPages];
+	pageTable = new TranslationEntry[numPages]; //make pageTable
 	
-	for(int i=0; i< numPages; i++){
-		int physPage = UserKernel.getPage();
-		Lib.assertTrue(physPage >= 0);
-		pageTable[i] = new TranslationEntry(i, physPage, true, false, false, false);
+	for(int i=0; i< numPages; i++){ //for each index in pageTable
+		int physPage = UserKernel.getPage(); //get a free physical page
+		Lib.assertTrue(physPage >= 0); //Ensures physical page number is valid
+		Lib.assertTrue(physPage < Machine.processor().getNumPhysPages());
+		pageTable[i] = new TranslationEntry(i, physPage, true, false, false, false);//put mew translation entry into pageTable
 	}
 
 	return true;
@@ -342,10 +343,11 @@ public class UserProcess {
 		/* for now, just assume virtual addresses=physical addresses
 		section.loadPage(i, vpn);*/
 		
-		TranslationEntry tEntry = pageTable[vpn];
-		tEntry.readOnly= section.isReadOnly();
+		
+		TranslationEntry tEntry = pageTable[vpn]; //tEntry is pageTable[virtual page number]
+		tEntry.readOnly= section.isReadOnly(); //tEntry's readonly values is sections readonly value
 	
-		int pPage = tEntry.ppn;
+		int pPage = tEntry.ppn;//get physical page number
 		
 		section.loadPage(i, pPage);
 	    }
@@ -358,10 +360,11 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+		//loops through all possible page numbers
 		for(int i=0; i< numPages; i++)
 		{
-			UserKernel.addPage(pageTable[i].ppn);
-			pageTable[i].valid = false;
+			UserKernel.addPage(pageTable[i].ppn);//adds page to pageTable
+			pageTable[i].valid = false;//marks page invalid
 		}
     }    
 
