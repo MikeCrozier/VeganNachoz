@@ -143,5 +143,5 @@ public class UserKernel extends ThreadedKernel {
     // dummy variables to make javac smarter
     private static Coff dummy1 = null;
 	
-	private LinkedList<Integer> pageTable = new LinkedList<Integer>();//MAKE A TABLE OF PAGES
+	private static LinkedList<Integer> pageTable = new LinkedList<Integer>();//MAKE A TABLE OF PAGES
 }
