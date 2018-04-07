@@ -126,13 +126,13 @@ public class UserKernel extends ThreadedKernel {
 	//ADDS A PAGE TO TABLE
 	public void addPage(int page)
 	{
-		machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
+		Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
 		Lib.assertTrue(page >= 0);
 		Lib.assertTrue(page < Machine.processor().getNumPhysPages());//MAKE SURE PAGE NUMBER IS VALID 
 		
 		pageTable.addPage(pageNumber);//ADD PAGE
 		
-		machine.interrupt().enable();
+		Machine.interrupt().enable();
 	}
 
     /** Globally accessible reference to the synchronized console. */
@@ -141,5 +141,5 @@ public class UserKernel extends ThreadedKernel {
     // dummy variables to make javac smarter
     private static Coff dummy1 = null;
 	
-	private static LinkedList<Integer> pageTable = new LinkedList<Integer>();//MAKE A TABLE OF PAGES
+	private LinkedList<Integer> pageTable = new LinkedList<Integer>();//MAKE A TABLE OF PAGES
 }
