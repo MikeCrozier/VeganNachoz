@@ -4,6 +4,8 @@ import nachos.machine.*;
 import nachos.threads.*;
 import nachos.userprog.*;
 
+import java.util.LinkedList;
+
 /**
  * A kernel that can support multiple user processes.
  */
@@ -108,7 +110,7 @@ public class UserKernel extends ThreadedKernel {
     }
 	
 	//GETS A FREE PAGE FROM PAGETABLE
-	public int getPage()
+	public static int getPage()
 	{
 		Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
 		
@@ -124,7 +126,7 @@ public class UserKernel extends ThreadedKernel {
 	}
 	
 	//ADDS A PAGE TO TABLE
-	public void addPage(int page)
+	public static void addPage(int page)
 	{
 		Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
 		Lib.assertTrue(page >= 0);
