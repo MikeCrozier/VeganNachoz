@@ -142,16 +142,16 @@ public class UserProcess {
 	    return 0;
 	*/
 	
-	//
-	TranslationEntry tEntry = pageTable[vPage];
-	tEntry.used = true;
 	
-	int pPage = entry.ppn;
+	TranslationEntry tEntry = pageTable[vPage]; //put virtual page into tEntry
+	tEntry.used = true; //tEntry is used
 	
-	if(pPage < 0 || pPage >= proc.getNumPhysPages())
+	int pPage = tEntry.ppn; //get physical page number
+	
+	if(pPage < 0 || pPage >= proc.getNumPhysPages()) //if page number is invalid
 		return 0;
 	
-	int pAddr = (pPage*pageSize) + addrOffset;
+	int pAddr = (pPage*pageSize) + addrOffset; //physical address
 	
 	
 	int amount = Math.min(length, memory.length-vaddr);
@@ -202,18 +202,18 @@ public class UserProcess {
 	    return 0;
 	*/
 	
-	TranslationEntry tEntry = pageTable[vPage];
-	tEntry.used = true;
+	TranslationEntry tEntry = pageTable[vPage]; //tEntry holds virtual page from pageTable
+	tEntry.used = true; //tEntry is used
 	
-	int pPage = entry.ppn;
+	int pPage = tEntry.ppn; //pPage is tEntry's physical page number
 	
-	if(pPage < 0 || pPage >= proc.getNumPhysPages())
+	if(pPage < 0 || pPage >= proc.getNumPhysPages()) //if page is invalid
 		return 0;
 	
-	int pAddr = (pPage*pageSize) + addrOffset;
-	tEntry.dirty = true;
+	int pAddr = (pPage*pageSize) + addrOffset; //get physical address
+	tEntry.dirty = true; //mark tEntry as being written to
 
-	int amount = Math.min(length, memory.length-vaddr);
+	int amount = Math.min(length, memory.length-vaddr); 
 	System.arraycopy(data, offset, memory, vaddr, amount);
 
 	return amount;
@@ -304,12 +304,13 @@ public class UserProcess {
 	    stringOffset += 1;
 	}
 	
-	pageTable = new TranslationEntry[numPages];
+	pageTable = new TranslationEntry[numPages]; //make pageTable
 	
-	for(int i=0; i< numPages; i++){
-		int physPage = UserKernel.getPage();
-		Lib.assertTrue(physPage >= 0);
-		pageTable[i] = new TranslationEntry(i, physPage, true, false, false, false);
+	for(int i=0; i< numPages; i++){ //for each index in pageTable
+		int physPage = UserKernel.getPage(); //get a free physical page
+		Lib.assertTrue(physPage >= 0); //Ensures physical page number is valid
+		Lib.assertTrue(physPage < Machine.processor().getNumPhysPages());
+		pageTable[i] = new TranslationEntry(i, physPage, true, false, false, false);//put mew translation entry into pageTable
 	}
 
 	return true;
@@ -342,10 +343,11 @@ public class UserProcess {
 		/* for now, just assume virtual addresses=physical addresses
 		section.loadPage(i, vpn);*/
 		
-		TranslationEntry tEntry = pageTable[vpn];
-		tEntry.readOnly= section.isReadOnly();
+		
+		TranslationEntry tEntry = pageTable[vpn]; //tEntry is pageTable[virtual page number]
+		tEntry.readOnly= section.isReadOnly(); //tEntry's readonly values is sections readonly value
 	
-		int pPage = tEntry.ppn;
+		int pPage = tEntry.ppn;//get physical page number
 		
 		section.loadPage(i, pPage);
 	    }
@@ -358,10 +360,11 @@ public class UserProcess {
      * Release any resources allocated by <tt>loadSections()</tt>.
      */
     protected void unloadSections() {
+		//loops through all possible page numbers
 		for(int i=0; i< numPages; i++)
 		{
-			UserKernel.addPage(pageTable[i].ppn);
-			pageTable[i].valid = false;
+			UserKernel.addPage(pageTable[i].ppn);//adds page to pageTable
+			pageTable[i].valid = false;//marks page invalid
 		}
     }    
 
@@ -398,348 +401,7 @@ public class UserProcess {
 	Lib.assertNotReached("Machine.halt() did not halt machine!");
 	return 0;
     }
-	
-    private void handleExit(int status){
-		for(int i = 2; i < maxFileD; i++){
-			if(fd[i] != null)
-					handleClose(i);
-		}
-		unloadSections();
-		if(processID == 0){
-			Lib.debug(dbgProcess, "\tTerminated");
-			Machine.halt();
-		}
-		else KThread.finish();
-	}
-	
-	private int handleJoin(int ProcessID, int status){
-		UserProcess child = children.get(ProcessID);
-		child.statusLock.acquire();
-		
-		Integer childStatus = child.exitStatus;
-		if (childStatus == null){
-			statusLock.acquire();
-			child.statusLock.release();
-			joinCond.sleep();
-			statusLock.release();
-			child.statusLock.acquire();
-			childStatus = child.exitStatus;
-		}
-		child.statusLock.release();
-		children.remove(ProcessID);
-		
-		byte[] statusBytes = new byte[4];
-		for (int j = 0; j < 4; j++) 
-			statusBytes[j] = (byte) (waitingStatus >>> j * 8);
-		writeVirtualMemory(status, statusBytes);
-		return 0;
-	}
 
-	private int handleExec(int file, int cLength, int vLength){
-		String fileName = readVirtualMemoryString(file, maxStringLen);
-		if(fileName == null || fileName.isEmpty())
-			return -1;
-		int[] vAddr = new int[cLength];
-		String[] vStrings = new String[cLength];
-		for (int i = 0; i < cLength; i++){
-			String s = readVirtualMemoryString(vAddr[i], maxStringLen);
-			if (s == null || s.isEmpty()) 
-				return -1;
-			vStrings[i] = s;
-		}
-		UserProcess newProcess = new UserProcess();
-		newProcess.processID = ++idCounter;
-		newProcess.parent = this;
-		this.children.add(newProcess);
-		newProcess.execute(fileName, vStrings);
-		int retPID = newProcess.processID;
-		return retPID;
-	}
-	
-/**
-     * Attempt to open the named disk file, creating it if does not exist,    *
-     * and return a file descriptor that can be used to access the file.      *
-     * Note that creat() can only be used to create files on disk; creat()    *
-     * will never return a file descriptor referrring to a stream             *
-     * Returns the new file descriptor, or -1 if an error occurred            *
-     *                                                                        *
-     * added by hy 1/18/2014                                                  *
-     *
-     */
-    private int handleCreat(int address) {
-        // private int handleCreate() {                                 
-        Lib.debug(dbgProcess, "handleCreat()");                   
-
-        // address is address of filename 
-        String filename = readVirtualMemoryString(address, maxStringLen);  
-
-        Lib.debug(dbgProcess, "Filename: "+filename);                     
-
-        // invoke open through stubFilesystem
-        OpenFile returnValue  = UserKernel.fileSystem.open(filename, true);   
-
-        if (returnValue == null) {  
-            Lib.debug(dbgProcess, "No file named "+filename+" found.");
-            return -1;                                                
-        }                                                             
-        else {                                                        
-            int fileHandle = findEmptyFileDescriptor();                
-            if (fileHandle < 0){
-        Lib.debug(dbgProcess, "No room for file.");
-                return -1;  
-        }
-        if (fd[fileHandle].toKill == true){
-            Lib.debug(dbgProcess, "File flagged to be removed.");
-            return -1;
-        }
-            else {                                                    
-                fd[fileHandle].fileName = filename;                   
-                fd[fileHandle].file = returnValue;                    
-                fd[fileHandle].IOpos = 0;                             
-                return fileHandle;                                    
-            }                                                          
-        }                                                             
-    }                                                                 
-
-    /**
-     * Attempt to open the named file and return a file descriptor.
-     *
-     * Note that open() can only be used to open files on disk; open() will never
-     * return a file descriptor referring to a stream.
-     *
-     * Returns the new file descriptor, or -1 if an error occurred.
-     */
-    private int handleOpen(int address) {
-        Lib.debug(dbgProcess, "[UserProcess.handleOpen] Start");      
-
-        Lib.debug(dbgProcess, "[UserProcess.handleOpen] address: "+address+"\n");   
-
-        // address is address of filename 
-        String filename = readVirtualMemoryString(address, maxStringLen); 
-
-        Lib.debug(dbgProcess, "filename: "+filename);            
-
-        // invoke open through stubFilesystem, truncate flag is set to false
-        OpenFile returnValue  = UserKernel.fileSystem.open(filename, false); 
-
-        if (returnValue == null) {  
-        Lib.debug(dbgProcess, "No file named "+filename+" found.");
-            return -1;                                  
-        }                                               
-        else {                                          
-            int fileHandle = findEmptyFileDescriptor();  
-            if (fileHandle < 0){
-        Lib.debug(dbgProcess, "No room for file.");
-                return -1;  
-        }
-        if (fd[fileHandle].toKill == true){
-            Lib.debug(dbgProcess, "File flagged to be removed.");
-            return -1;
-        }
-            else {                                  
-                fd[fileHandle].fileName = filename; 
-                fd[fileHandle].file = returnValue;  
-                fd[fileHandle].IOpos = 0;           
-                return fileHandle;                  
-            }                                        
-        }                                           
-    }                                               
- 
-
-    /**
-     * Attempt to read up to count bytes into buffer from the file or stream
-     * referred to by fileDescriptor.
-     *
-     * On success, the number of bytes read is returned. If the file descriptor
-     * refers to a file on disk, the file position is advanced by this number.
-     *
-     * It is not necessarily an error if this number is smaller than the number of
-     * bytes requested. If the file descriptor refers to a file on disk, this
-     * indicates that the end of the file has been reached. If the file descriptor
-     * refers to a stream, this indicates that the fewer bytes are actually
-     * available right now than were requested, but more bytes may become available
-     * in the future. Note that read() never waits for a stream to have more data;
-     * it always returns as much as possible immediately.
-     *
-     * On error, -1 is returned, and the new file position is undefined. This can
-     * happen if fileDescriptor is invalid, if part of the buffer is read-only or
-     * invalid, or if a network stream has been terminated by the remote host and
-     * no more data is available.
-     */
-    private int handleRead(int descriptor, int bufferAddress, int bufferSize) {          
-        Lib.debug(dbgProcess, "handleRead()");     
-         
-        int handler = descriptor;                  
-        int bufaddr = bufferAddress;               
-        int bufsize = bufferSize;                  
-
-        Lib.debug(dbgProcess, "handle: " + handler);                   
-        Lib.debug(dbgProcess, "buf address: " + bufaddr);               
-        Lib.debug(dbgProcess, "buf size: " + bufsize);                
-
-        // get data regarding to file descriptor
-        if (handler < 0 || handler > maxFileD                         
-                || fd[handler].file == null)                          
-            return -1;                                                
-
-        FileDescriptor fd2 = fd[handler];                             
-        byte[] buff = new byte[bufsize];                              
-
-        // invoke read through stubFilesystem
-        int returnValue = fd2.file.read(fd2.IOpos, buff, 0, bufsize); 
-
-        if (returnValue < 0) {                                    
-            return -1;                                            
-        }                                                         
-        else {                                                    
-            int number = writeVirtualMemory(bufaddr, buff);       
-            fd2.IOpos = fd2.IOpos + number;                       
-            return returnValue;                                         
-        }                                                               
-    }                                                                   
-    
-    /**
-     * Attempt to write up to count bytes from buffer to the file or stream
-     * referred to by fileDescriptor. write() can return before the bytes are
-     * actually flushed to the file or stream. A write to a stream can block,
-     * however, if kernel queues are temporarily full.
-     *
-     * On success, the number of bytes written is returned (zero indicates nothing
-     * was written), and the file position is advanced by this number. It IS an
-     * error if this number is smaller than the number of bytes requested. For
-     * disk files, this indicates that the disk is full. For streams, this
-     * indicates the stream was terminated by the remote host before all the data
-     * was transferred.
-     *
-     * On error, -1 is returned, and the new file position is undefined. This can
-     * happen if fileDescriptor is invalid, if part of the buffer is invalid, or
-     * if a network stream has already been terminated by the remote host.
-     *
-     * Syscall: 
-     *       int write(int fileDescriptor, void *buffer, int count);
-     *
-     */
-     private int handleWrite(int descriptor, int bufferAddress, int bufferSize) {
-        Lib.debug(dbgProcess, "handleWrite()");    
-         
-        int handler = descriptor;                  
-        int bufaddr = bufferAddress;               
-        int bufsize = bufferSize;                    
-
-        Lib.debug(dbgProcess, "handle: " + handler);                      
-        Lib.debug(dbgProcess, "buf address: " + bufaddr);                  
-        Lib.debug(dbgProcess, "buf size: " + bufsize);                   
-
-        // get data regarding to file descriptor
-        if (handler < 0 || handler > maxFileD                            
-                || fd[handler].file == null)                             
-            return -1;                                                   
-
-        FileDescriptor fd2 = fd[handler];                                
-
-        byte[] buff = new byte[bufsize];                                   
-
-        int bytesRead = readVirtualMemory(bufaddr, buff);                
-
-        // invoke read through stubFilesystem                            
-        int returnValue = fd2.file.write(fd2.IOpos, buff, 0, bytesRead); 
-
-        if (returnValue < 0) {                                      
-            return -1;                                              
-        }                                                           
-        else {                                                      
-            fd2.IOpos = fd2.IOpos + returnValue;                    
-            return returnValue;                                     
-        }                                                           
-    }
-
-    /**
-     * Close a file descriptor, so that it no longer refers to any file or stream
-     * and may be reused.
-     *
-     * If the file descriptor refers to a file, all data written to it by write()
-     * will be flushed to disk before close() returns.
-     * If the file descriptor refers to a stream, all data written to it by write()
-     * will eventually be flushed (unless the stream is terminated remotely), but
-     * not necessarily before close() returns.
-     *
-     * The resources associated with the file descriptor are released. If the
-     * descriptor is the last reference to a disk file which has been removed using
-     * unlink, the file is deleted (this detail is handled by the file system
-     * implementation).
-     *
-     * Returns 0 on success, or -1 if an error occurred.
-     */
-    private int handleClose(int address) {                          
-        Lib.debug(dbgProcess, "handleClose()");                     
-        
-        int handler = address;                                      
-        if (address < 0 || address >= maxFileD)                     
-            return -1;                                              
-
-        boolean returnValue = true;                                 
-
-        FileDescriptor fd2 = fd[handler];                           
-
-        fd2.IOpos = 0;                                              
-        fd2.file.close();                                           
-
-        // remove this file if necessary                            
-        if (fd2.toKill) {                                               
-            returnValue = UserKernel.fileSystem.remove(fd2.fileName);     
-            fd2.toKill = false;                         
-        }                                              
-
-        fd2.fileName = "";
-    fd2.file = null;
-    fd2.IOpos = 0;
-
-        return returnValue ? 0 : -1;                   
-    }                                                  
-
-    /**
-     * Delete a file from the file system. If no processes have the file open, the
-     * file is deleted immediately and the space it was using is made available for
-     * reuse.
-     *
-     * If any processes still have the file open, the file will remain in existence
-     * until the last file descriptor referring to it is closed. However, creat()
-     * and open() will not be able to return new file descriptors for the file
-     * until it is deleted.
-     *
-     * Returns 0 on success, or -1 if an error occurred.
-     */
-    private int handleUnlink(int address) {
-        Lib.debug(dbgProcess, "handleUnlink()");
-
-        boolean returnValue = true;
-
-        // address is address of filename 
-        String filename = readVirtualMemoryString(address, maxFileD); 
-
-        Lib.debug(dbgProcess, "filename: " + filename);                  
-
-        int fileHandler = findFileDescriptorByName(filename);     
-        if (fileHandler < 0) {                      
-           /* invoke open through stubFilesystem, truncate flag is set to false
-            * If no processes have the file open, the file is deleted immediately 
-            * and the space it was using is made available for reuse.
-            */
-            returnValue = UserKernel.fileSystem.remove(fd[fileHandler].fileName); 
-        }                           
-        else {                      
-            /* If any processes still have the file open, 
-             * the file will remain in existence until the 
-             * last file descriptor referring to it is closed.
-             * However, creat() and open() will not be able to 
-             * return new file descriptors for the file until 
-             * it is deleted.
-             */
-             fd[fileHandler].toKill = true;   
-        } 
-
-        return returnValue ? 0 : -1;                                          
-    }
 
     private static final int
         syscallHalt = 0,
@@ -824,34 +486,74 @@ public class UserProcess {
 	}
     }
 	
-    private class FileDescriptor{
-            public FileDescriptor(){}
-            private String fileName = "";
-            private OpenFile file = null;
-            private int IOpos = 0;
-            private boolean toKill = false;
-        FileDescriptor(int filePointer){    
-        }
-       
-    }    
-
-    private int findEmptyFileDescriptor(){
-        for (int i = 0; i < maxFileD; i++){
-            if(fd[i].file == null){
-                return i;
-            }
-        }
-        return -1;
-    }
+	private void handleExit(int status){
+		for(int i = 2; i < maxFileD; i++){
+			if(fd[i] != null)
+					handleClose(i);
+		}
+		unloadSections();
+		if(processID == 0){
+			Lib.debug(dbgProcess, "\tTerminated");
+			Machine.halt();
+		}
+		else KThread.finish();
+	}
 	
-    private int findFileDescriptorByName(String file){
-        for (int i = 0; i < maxFileD; i++){
-            if (fd[i].fileName == file)
-            return 1;
-        }
-        return -1;
-    }
+	private int handleJoin(int ProcessID, int status){
+		UserProcess child = children.get(ProcessID);
+		child.statLock.acquire();
+		
+		Integer childStatus = child.eStat;
+		if (childStatus == null){
+			statLock.acquire();
+			child.statLock.release();
+			jCond.sleep();
+			statLock.release();
+			child.statLock.acquire();
+			childStatus = child.eStat;
+		}
+		child.statLock.release();
+		children.remove(ProcessID);
+		
+		byte[] statusBytes = new byte[4];
+		for (int j = 0; j < 4; j++) 
+			statusBytes[j] = (byte) (waitingStatus >>> j * 8);
+		writeVirtualMemory(status, statusBytes);
+		return 0;
+	}
 
+	private int handleExec(int file, int cLength, int vLength){
+		String fileName = readVirtualMemoryString(file, maxStringLen);
+		if(fileName == null || fileName.isEmpty())
+			return -1;
+		int[] vAddr = new int[cLength];
+		String[] vStrings = new String[cLength];
+		for (int i = 0; i < cLength; i++){
+			String s = readVirtualMemoryString(vAddr[i], maxStringLen);
+			if (s == null || s.isEmpty()) 
+				return -1;
+			vStrings[i] = s;
+		}
+		UserProcess newProcess = new UserProcess();
+		newProcess.processID = ++idCounter;
+		newProcess.parent = this;
+		this.children.add(newProcess);
+		newProcess.execute(fileName, vStrings);
+		int retPID = newProcess.processID;
+		return retPID;
+
+	private static final int maxStringLen = 256;
+	public int processID;
+	public UserProcess parent;
+	private Integer waitingStatus;
+	private static int idCounter = 0;
+	// Max number of file descriptors 
+    public static final int maxFileD = 16;
+	private FileDescriptor fd[] = new FileDescriptor[maxFileD]; 
+	protected Lock statLock;
+	protected Condition jCond;
+	protected Integer eStat;
+	
     /** The program being run by this process. */
     protected Coff coff;
 
@@ -867,18 +569,5 @@ public class UserProcess {
     private int argc, argv;
 	
     private static final int pageSize = Processor.pageSize;
-    private static final char dbgProcess = 'a'; 
-
-	private static final int maxStringLen = 256;
-	public int processID;
-	public UserProcess parent;
-	public LinkedList<UserProcess> children;
-	private Integer waitingStatus;
-	private static int idCounter = 0;
-	// Max number of file descriptors 
-    public static final int maxFileD = 16;
-	private FileDescriptor fd[] = new FileDescriptor[maxFileD]; 
-	protected Lock statusLock;
-	protected Condition joinCond;
-	protected Integer exitStatus;
+    private static final char dbgProcess = 'a';
 }
