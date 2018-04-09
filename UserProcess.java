@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 package nachos.userprog;
 
 import nachos.machine.*;
