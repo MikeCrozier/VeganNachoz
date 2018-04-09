@@ -29,6 +29,11 @@ public class UserKernel extends ThreadedKernel {
 	Machine.processor().setExceptionHandler(new Runnable() {
 		public void run() { exceptionHandler(); }
 	    });
+		
+		int pages = Machine.processor().getNumPhysPages();
+		for(int i =0; i <= pages; i++){
+			pageTable.add(i);
+		}
     }
 
     /**
@@ -112,15 +117,15 @@ public class UserKernel extends ThreadedKernel {
 	//GETS A FREE PAGE FROM PAGETABLE
 	public static int getPage()
 	{
-		Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
+		//Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
 		
 		if(pageTable.isEmpty())//IF NO PAGES AVAILABLE
 		{
-			Machine.interrupt().enable();
+			//Machine.interrupt().enable();
 			return -1;//TELL'EM
 		}
 		else{//IF WE GOT PAGES
-			Machine.interrupt().enable();
+			//Machine.interrupt().enable();
 			return pageTable.removeFirst();//TELL'EM
 		}
 	}
@@ -128,13 +133,13 @@ public class UserKernel extends ThreadedKernel {
 	//ADDS A PAGE TO TABLE
 	public static void addPage(int page)
 	{
-		Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
+		//Machine.interrupt().disable();//DISABLE THEM PESKY INTERRUPTS
 		Lib.assertTrue(page >= 0);
 		Lib.assertTrue(page < Machine.processor().getNumPhysPages());//MAKE SURE PAGE NUMBER IS VALID 
 		
 		pageTable.add(page);//ADD PAGE
 		
-		Machine.interrupt().enable();
+		//Machine.interrupt().enable();
 	}
 
     /** Globally accessible reference to the synchronized console. */
