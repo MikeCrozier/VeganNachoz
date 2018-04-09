@@ -485,7 +485,75 @@ public class UserProcess {
 	    Lib.assertNotReached("Unexpected exception");
 	}
     }
+	
+	private void handleExit(int status){
+		for(int i = 2; i < maxFileD; i++){
+			if(fd[i] != null)
+					handleClose(i);
+		}
+		unloadSections();
+		if(processID == 0){
+			Lib.debug(dbgProcess, "\tTerminated");
+			Machine.halt();
+		}
+		else KThread.finish();
+	}
+	
+	private int handleJoin(int ProcessID, int status){
+		UserProcess child = children.get(ProcessID);
+		child.statLock.acquire();
+		
+		Integer childStatus = child.eStat;
+		if (childStatus == null){
+			statLock.acquire();
+			child.statLock.release();
+			jCond.sleep();
+			statLock.release();
+			child.statLock.acquire();
+			childStatus = child.eStat;
+		}
+		child.statLock.release();
+		children.remove(ProcessID);
+		
+		byte[] statusBytes = new byte[4];
+		for (int j = 0; j < 4; j++) 
+			statusBytes[j] = (byte) (waitingStatus >>> j * 8);
+		writeVirtualMemory(status, statusBytes);
+		return 0;
+	}
 
+	private int handleExec(int file, int cLength, int vLength){
+		String fileName = readVirtualMemoryString(file, maxStringLen);
+		if(fileName == null || fileName.isEmpty())
+			return -1;
+		int[] vAddr = new int[cLength];
+		String[] vStrings = new String[cLength];
+		for (int i = 0; i < cLength; i++){
+			String s = readVirtualMemoryString(vAddr[i], maxStringLen);
+			if (s == null || s.isEmpty()) 
+				return -1;
+			vStrings[i] = s;
+		}
+		UserProcess newProcess = new UserProcess();
+		newProcess.processID = ++idCounter;
+		newProcess.parent = this;
+		this.children.add(newProcess);
+		newProcess.execute(fileName, vStrings);
+		int retPID = newProcess.processID;
+		return retPID;
+
+	private static final int maxStringLen = 256;
+	public int processID;
+	public UserProcess parent;
+	private Integer waitingStatus;
+	private static int idCounter = 0;
+	// Max number of file descriptors 
+    public static final int maxFileD = 16;
+	private FileDescriptor fd[] = new FileDescriptor[maxFileD]; 
+	protected Lock statLock;
+	protected Condition jCond;
+	protected Integer eStat;
+	
     /** The program being run by this process. */
     protected Coff coff;
 
