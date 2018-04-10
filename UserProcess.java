@@ -401,6 +401,243 @@ public class UserProcess {
 	Lib.assertNotReached("Machine.halt() did not halt machine!");
 	return 0;
     }
+	
+	/*
+    The Creat method accepts an address as an argument and attempts to open the file linked to the address, if 
+    no file is available to open, it will create a file. If however I file is linked to the address, the 
+    method will check to see if the file has been set to be unlinked. If it has, the method will not open the 
+    file and an error message will be produced.
+     */
+
+    private int handleCreat(int address) {
+        // private int handleCreate() {                                 
+        Lib.debug(dbgProcess, "handleCreat()");                   
+
+        // address is address of filename 
+        String filename = readVirtualMemoryString(address, maxStringLen);  
+
+        Lib.debug(dbgProcess, "Filename: "+filename);                     
+
+        // invoke open through stubFilesystem
+        OpenFile returnValue  = UserKernel.fileSystem.open(filename, true);   
+
+        if (returnValue == null) {  
+            Lib.debug(dbgProcess, "No file named "+filename+" found.");
+            return -1;                                                
+        }                                                             
+        else {                                                        
+            int fileHandle = findEmptyFileDescriptor();                
+            if (fileHandle < 0){
+        Lib.debug(dbgProcess, "No room for file.");
+                return -1;  
+        }
+        if (fd[fileHandle].toKill == true){
+            Lib.debug(dbgProcess, "File flagged to be removed.");
+            return -1;
+        }
+            else {                                                    
+                fd[fileHandle].fileName = filename;                   
+                fd[fileHandle].file = returnValue;                    
+                fd[fileHandle].IOpos = 0;                             
+                return fileHandle;                                    
+            }                                                          
+        }                                                             
+    }                                                                 
+
+    /*
+    The Open method does the exact same functionality as the Creat method, however, it will only open a file 
+    not create one if there is no file linked to the address input
+     */
+
+    private int handleOpen(int address) {
+        Lib.debug(dbgProcess, "[UserProcess.handleOpen] Start");      
+
+        Lib.debug(dbgProcess, "[UserProcess.handleOpen] address: "+address+"\n");   
+
+        // address is address of filename 
+        String filename = readVirtualMemoryString(address, maxStringLen); 
+
+        Lib.debug(dbgProcess, "filename: "+filename);            
+
+        // invoke open through stubFilesystem, truncate flag is set to false
+        OpenFile returnValue  = UserKernel.fileSystem.open(filename, false); 
+
+        if (returnValue == null) {  
+        Lib.debug(dbgProcess, "No file named "+filename+" found.");
+            return -1;                                  
+        }                                               
+        else {                                          
+            int fileHandle = findEmptyFileDescriptor();  
+            if (fileHandle < 0){
+        Lib.debug(dbgProcess, "No room for file.");
+                return -1;  
+        }
+        if (fd[fileHandle].toKill == true){
+            Lib.debug(dbgProcess, "File flagged to be removed.");
+            return -1;
+        }
+            else {                                  
+                fd[fileHandle].fileName = filename; 
+                fd[fileHandle].file = returnValue;  
+                fd[fileHandle].IOpos = 0;           
+                return fileHandle;                  
+            }                                        
+        }                                           
+    }                                               
+ 
+
+    /*
+    The Read method will take in 3 arguments, the file descriptor, the buffer address, and the buffer size. 
+    Before anything can be done we must confirm that all three of these arguments are not going to cause any 
+    problems. Afterwards we will need to create a buffer array. Then we can use the read method in the 
+    SyncConsole class to read through the StubFileSystem. Then we need to write this to virtual memory. If the 
+    read was successful, the number of bytes that was read through the method will be returned. If an error 
+    occurs during the process, it will return -1
+     */
+
+    private int handleRead(int descriptor, int bufferAddress, int bufferSize) {          
+        Lib.debug(dbgProcess, "handleRead()");     
+         
+        int handler = descriptor;                  
+        int bufaddr = bufferAddress;               
+        int bufsize = bufferSize;                  
+
+        Lib.debug(dbgProcess, "handle: " + handler);                   
+        Lib.debug(dbgProcess, "buf address: " + bufaddr);               
+        Lib.debug(dbgProcess, "buf size: " + bufsize);                
+
+        // get data regarding to file descriptor
+        if (handler < 0 || handler > maxFileD                         
+                || fd[handler].file == null)                          
+            return -1;                                                
+
+        FileDescriptor fd2 = fd[handler];                             
+        byte[] buff = new byte[bufsize];                              
+
+        // invoke read through stubFilesystem
+        int returnValue = fd2.file.read(fd2.IOpos, buff, 0, bufsize); 
+
+        if (returnValue < 0) {                                    
+            return -1;                                            
+        }                                                         
+        else {                                                    
+            int number = writeVirtualMemory(bufaddr, buff);       
+            fd2.IOpos = fd2.IOpos + number;                       
+            return returnValue;                                         
+        }                                                               
+    }                                                                   
+    
+    /*
+    The Write method is very similar to the read method, mainly because for the write method to execute, it 
+    requires the same executions as the read method. However, with the write method, instead of file.read, we 
+    will use file.write to write the input.
+     */
+
+     private int handleWrite(int descriptor, int bufferAddress, int bufferSize) {
+        Lib.debug(dbgProcess, "handleWrite()");    
+         
+        int handler = descriptor;                  
+        int bufaddr = bufferAddress;               
+        int bufsize = bufferSize;                    
+
+        Lib.debug(dbgProcess, "handle: " + handler);                      
+        Lib.debug(dbgProcess, "buf address: " + bufaddr);                  
+        Lib.debug(dbgProcess, "buf size: " + bufsize);                   
+
+        // get data regarding to file descriptor
+        if (handler < 0 || handler > maxFileD                            
+                || fd[handler].file == null)                             
+            return -1;                                                   
+
+        FileDescriptor fd2 = fd[handler];                                
+
+        byte[] buff = new byte[bufsize];                                   
+
+        int bytesRead = readVirtualMemory(bufaddr, buff);                
+
+        // invoke read through stubFilesystem                            
+        int returnValue = fd2.file.write(fd2.IOpos, buff, 0, bytesRead); 
+
+        if (returnValue < 0) {                                      
+            return -1;                                              
+        }                                                           
+        else {                                                      
+            fd2.IOpos = fd2.IOpos + returnValue;                    
+            return returnValue;                                     
+        }                                                           
+    }
+
+    /*
+     The Close method requires an address of a file as its only argument. The method frees up the use of a 
+     file descriptor by closing the current file. The method will check the address and ensure that in meets 
+     the FileDescriptor parameters and will result in an error if it does not. The file descriptor that is
+     used to refer to a file will be closed and made available for other files. The method will check to see 
+     if the file has been set by Unlink to be removed. If it has been set to remove, the resources used by the 
+     recently closed file will become available for another. If the close method was successful, the results 
+     will return 0, and if an error occurs it will return -1.
+     */
+
+    private int handleClose(int address) {                          
+        Lib.debug(dbgProcess, "handleClose()");                     
+        
+        int handler = address;                                      
+        if (address < 0 || address >= maxFileD)                     
+            return -1;                                              
+
+        boolean returnValue = true;                                 
+
+        FileDescriptor fd2 = fd[handler];                           
+
+        fd2.IOpos = 0;                                              
+        fd2.file.close();                                           
+
+        // remove this file if necessary                            
+        if (fd2.toKill) {                                               
+            returnValue = UserKernel.fileSystem.remove(fd2.fileName);     
+            fd2.toKill = false;                         
+        }                                              
+
+        fd2.fileName = "";
+        fd2.file = null;
+        fd2.IOpos = 0;
+
+        return returnValue ? 0 : -1;                   
+    }                                                  
+
+    /*
+    This Unlink methods purpose is to delete a file from the file system. This is done by locating the file
+     and determining if any process is currently using the file. If no process is using it, the file is 
+     removed and the memory space allocated for that file is now available for another file. If the file has 
+     is being used by a process, the file will be set to be removed, and will be removed once the processes 
+     are done. If the file was successfully deleted, the results returned will be 0, and if an error had 
+     occurred during the process, the result will return -1
+     */
+
+    private int handleUnlink(int address) {
+        Lib.debug(dbgProcess, "handleUnlink()");
+
+        boolean returnValue = true;
+
+        // address is address of filename 
+        String filename = readVirtualMemoryString(address, maxFileD); 
+
+        Lib.debug(dbgProcess, "filename: " + filename);                  
+
+        int fileHandler = findFileDescriptorByName(filename);     
+        if (fileHandler < 0) {                      
+           /* invoke open through stubFilesystem, truncate flag is set to false
+             If no processes have the file open, the file is deleted immediately 
+             and the space it was using is made available for reuse.
+            */
+            returnValue = UserKernel.fileSystem.remove(fd[fileHandler].fileName); 
+        }                           
+        else {                      
+            // If the file is in use, set toKill to true to be removed once the file is done being used
+             fd[fileHandler].toKill = true;   
+        } 
+
+        return returnValue ? 0 : -1;                                          
+    }
 
 
     private static final int
@@ -541,6 +778,39 @@ public class UserProcess {
 		newProcess.execute(fileName, vStrings);
 		int retPID = newProcess.processID;
 		return retPID;
+	}
+	
+	// File Descriptor constructor
+    private class FileDescriptor{
+            public FileDescriptor(){}
+            private String fileName = "";
+            private OpenFile file = null;
+            private int IOpos = 0;
+            private boolean toKill = false;
+        FileDescriptor(int filePointer){    
+        }
+       
+    } 
+
+
+//method to find empty file descriptor location
+    private int findEmptyFileDescriptor(){
+        for (int i = 0; i < maxFileD; i++){
+            if(fd[i].file == null){
+                return i;
+            }
+        }
+        return -1;
+    }
+    
+// method for finding file descriptor by filename
+    private int findFileDescriptorByName(String file){
+        for (int i = 0; i < maxFileD; i++){
+            if (fd[i].filename == file)
+            return 1;
+        }
+        return -1;
+    }
 
 	private static final int maxStringLen = 256;
 	public int processID;
