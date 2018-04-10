@@ -723,61 +723,83 @@ public class UserProcess {
 	}
     }
 	
+		/**
+	* The exit system call will take a process and terminate it and anything that process had open,
+	* this will also be performed if the process if abnormally abrupted. The exit status of this 
+	* process has to be transferred to the parent that way the parent won’t call the join system call.
+	* If the root thread calls this system call Machine.halt will be called
+	*  
+	* @param status  status integer is the exit status of the thread that is using the system call
+	*/
 	private void handleExit(int status){
 		for(int i = 2; i < maxFileD; i++){
 			if(fd[i] != null)
-					handleClose(i);
+					handleClose(i); //closes all open files after the root processes
 		}
 		unloadSections();
-		if(processID == 0){
+		if(processID == 0){ //machine process ID
 			Lib.debug(dbgProcess, "\tTerminated");
 			Machine.halt();
 		}
-		else KThread.finish();
+		else KThread.finish(); //finishes any thread that isnt the machine process
 	}
 	
+	/**
+	* The process who calls this system call will join the the terminated process, if it is still running join will wait 
+	* until it is exited, if there is an error it will return -1. The process that joins has to be the parent of the process
+	* that uses the system call, and can only be joined once.
+	*
+	* @param ProcessID  is a globally unique positive integer that will be assigned to every process when they are created to keep track of them
+	* @param status  is the exit status of the thread it is running that will be terminated
+	*/
 	private int handleJoin(int ProcessID, int status){
-		UserProcess child = children.get(ProcessID);
-		child.statLock.acquire();
+		UserProcess child = children.get(ProcessID); //sets the user process to that of the specified child join
+		child.statLock.acquire(); //acquire lock
 		
-		Integer childStatus = child.eStat;
+		Integer childStatus = child.eStat; //exit status
 		if (childStatus == null){
 			statLock.acquire();
 			child.statLock.release();
 			jCond.sleep();
 			statLock.release();
 			child.statLock.acquire();
-			childStatus = child.eStat;
+			childStatus = child.eStat; 
 		}
 		child.statLock.release();
 		children.remove(ProcessID);
 		
 		byte[] statusBytes = new byte[4];
 		for (int j = 0; j < 4; j++) 
-			statusBytes[j] = (byte) (waitingStatus >>> j * 8);
-		writeVirtualMemory(status, statusBytes);
-		return 0;
+			statusBytes[j] = (byte) (waitingStatus >>> j * 8); //byte offset
+		writeVirtualMemory(status, statusBytes); //write to the virtual memory
+		return 0; //returns 0 as there is no error
 	}
 
-	private int handleExec(int file, int cLength, int vLength){
-		String fileName = readVirtualMemoryString(file, maxStringLen);
-		if(fileName == null || fileName.isEmpty())
+	/**
+	* The execute system call will overwrite the current process with a new one via the file passed and will 
+	* return the new processID. 
+	*
+	* @param file  the ID of the file to be executed
+	*/
+	private int handleExec(int file, int cLength){
+		String fileName = readVirtualMemoryString(file, maxStringLen); //reads the system for the file being executed
+		if(fileName == null || fileName.isEmpty()) //error handling
 			return -1;
 		int[] vAddr = new int[cLength];
 		String[] vStrings = new String[cLength];
 		for (int i = 0; i < cLength; i++){
-			String s = readVirtualMemoryString(vAddr[i], maxStringLen);
+			String s = readVirtualMemoryString(vAddr[i], maxStringLen); //virtual address of the file that is executed
 			if (s == null || s.isEmpty()) 
 				return -1;
 			vStrings[i] = s;
 		}
-		UserProcess newProcess = new UserProcess();
-		newProcess.processID = ++idCounter;
+		UserProcess newProcess = new UserProcess(); //creating new process for the new execution
+		newProcess.processID = ++idCounter; //ID counter increases
 		newProcess.parent = this;
 		this.children.add(newProcess);
-		newProcess.execute(fileName, vStrings);
+		newProcess.execute(fileName, vStrings); //executes
 		int retPID = newProcess.processID;
-		return retPID;
+		return retPID; //the new Process ID
 	}
 	
 	// File Descriptor constructor
@@ -813,16 +835,15 @@ public class UserProcess {
     }
 
 	private static final int maxStringLen = 256;
-	public int processID;
+	public int processID; 
 	public UserProcess parent;
 	private Integer waitingStatus;
-	private static int idCounter = 0;
-	// Max number of file descriptors 
-    public static final int maxFileD = 16;
+	private static int idCounter = 0; //counter for process ID
+    public static final int maxFileD = 16; 	// Max number of file descriptors 
 	private FileDescriptor fd[] = new FileDescriptor[maxFileD]; 
-	protected Lock statLock;
+	protected Lock statLock; 	//condition locks
 	protected Condition jCond;
-	protected Integer eStat;
+	protected Integer eStat; 	//exit status
 	
     /** The program being run by this process. */
     protected Coff coff;
